@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>インド × 現代音楽 プロンプト生成ツール</title>
+
+<!-- 最低限のデザイン -->
+<style>
+  body{font-family:Arial,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif;margin:0;background:#fafafa;color:#333}
+  h1{margin:0 0 20px;font-size:1.6rem;text-align:center;padding:20px;background:#2196f3;color:#fff}
+  h2{font-size:1.2rem}
+  /* オプションカード */
+  .option-label{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid #ddd;border-radius:5px;cursor:pointer;transition:background-color .3s}
+  .option-label:hover{background:#f5f5f5}
+  .option-label.checked{background:#e3f2fd}
+  /* レイアウト */
+  #optionsContainer,#promptContainer{max-width:800px;margin:0 auto;padding:20px}
+  #optionsGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:20px}
+  button{border:none;border-radius:5px;padding:12px 24px;font-size:16px;cursor:pointer}
+  .btn-primary{background:#2196f3;color:#fff}
+  .btn-success{background:#4caf50;color:#fff}
+  .btn-warning{background:#ff9800;color:#fff}
+  /* 生成結果 */
+  #promptBox{background:#f9f9f9;border:1px solid #ddd;border-radius:5px;padding:20px;white-space:pre-wrap;line-height:1.6}
+</style>
+</head>
+<body>
+  <h1>インド × 現代音楽 プロンプト生成ツール</h1>
+
+  <div id="optionsContainer"></div>
+  <div id="promptContainer" style="display:none"></div>
+
+<!-- 生成ロジック -->
+<script>
+/* ---------- 選択肢マスター（日本語 / 英語） ---------- */
+const musicElements = [
+  { jp:"音楽ジャンル", en:["Bollywood","Classical","Pop","Rock","Jazz","Hip Hop","Electronic","Folk","Fusion","Ambient"] ,
+    jpOptions:["ボリウッド","クラシカル","ポップ","ロック","ジャズ","ヒップホップ","エレクトロニック","フォーク","フュージョン","アンビエント"] },
+  { jp:"リズム", en:["4/4 Beat","3/4 Beat","6/8 Beat","7/8 Beat","Afro Beat","Reggae Beat","Latin Beat","Funk Beat","Breakbeat","Dubstep Beat"],
+    jpOptions:["4/4ビート","3/4ビート","6/8ビート","7/8ビート","アフロビート","レゲエビート","ラテンビート","ファンクビート","ブレイクビート","ダブステップビート"] },
+  { jp:"メロディ演奏楽器", en:["Sitar","Flute","Synthesizer","Electric Guitar","Piano","Violin","Harmonium","Sarangi","Bass Guitar","Saxophone"],
+    jpOptions:["シタール","フルート","シンセサイザー","エレキギター","ピアノ","バイオリン","ハルモニウム","サーランギー","ベースギター","サックス"] },
+  { jp:"テンポ（BPM）", en:["60-70 BPM","70-90 BPM","90-110 BPM","110-130 BPM","130-150 BPM","150-170 BPM","170-190 BPM","190-210 BPM","Variable Tempo","Rubato"],
+    jpOptions:["60-70 BPM","70-90 BPM","90-110 BPM","110-130 BPM","130-150 BPM","150-170 BPM","170-190 BPM","190-210 BPM","可変テンポ","ルバート"] },
+  { jp:"ムード", en:["Happy","Sad","Romantic","Energetic","Calm","Melancholic","Festive","Spiritual","Dark","Uplifting"],
+    jpOptions:["ハッピー","サッド","ロマンチック","エナジェティック","カーム","メランコリック","フェスティブ","スピリチュアル","ダーク","アップリフティング"] },
+  { jp:"楽器", en:["Tabla","Synth Drums","Sitar","Electric Guitar","Bansuri","Bass Guitar","Harmonium","Keyboard","Dholak","Electronic Pads"],
+    jpOptions:["タブラ","シンセドラム","シタール","エレキギター","バンスリ","ベースギター","ハルモニウム","キーボード","ドーラク","エレクトロニックパッド"] },
+  { jp:"音楽構成", en:["Intro-Verse-Chorus","AABA Form","12-Bar Blues","Raga Development","Buildup-Drop","Ambient Development","Jam Format","Theme-Variation","Cyclical Form","Free Form"],
+    jpOptions:["イントロ-バース-コーラス","AABA形式","12小節ブルース","ラーガ展開","ビルドアップ-ドロップ","アンビエント展開","ジャム形式","テーマ-バリエーション","循環形式","フリーフォーム"] },
+  { jp:"特殊効果", en:["Reverb","Delay","Distortion","Chorus","Flanger","Phaser","Auto-Tune","Sampling","Looping","None"],
+    jpOptions:["リバーブ","ディレイ","ディストーション","コーラス","フランジャー","フェイザー","オートチューン","サンプリング","ループ","なし"] }
+];
+
+/* ---------- 状態管理 ---------- */
+let currentStep = 0;
+let selections = Array(musicElements.length).fill([]);
+
+/* ---------- 画面描画 ---------- */
+function renderStep(step){
+  const el = musicElements[step];
+  const container = document.getElementById('optionsContainer');
+  container.innerHTML = '';
+
+  // タイトル & 進捗
+  container.insertAdjacentHTML('beforeend',
+    `<h2>${el.jp} を選択してください（複数可）</h2>
+     <div style="background:#f0f0f0;padding:10px;border-radius:5px;margin-bottom:20px;text-align:center">
+       ${step+1} / ${musicElements.length}
+     </div>`);
+
+  // オプション
+  const grid = document.createElement('div');
+  grid.id = 'optionsGrid';
+  el.jpOptions.forEach(opt=>{
+    const label = document.createElement('label');
+    label.className = 'option-label';
+    label.innerHTML = `<input type="checkbox" value="${opt}">${opt}`;
+    label.querySelector('input').addEventListener('change',e=>{
+      label.classList.toggle('checked',e.target.checked);
+    });
+    grid.appendChild(label);
+  });
+  container.appendChild(grid);
+
+  // 次へ / 生成 ボタン
+  const btn = document.createElement('button');
+  btn.textContent = (step === musicElements.length-1) ? '音楽生成プロンプト生成' : '次へ';
+  btn.className = 'btn-primary';
+  btn.onclick = nextStep;
+  container.appendChild(btn);
+}
+
+/* 次ステップまたは生成 */
+function nextStep(){
+  const checked = Array.from(document.querySelectorAll('#optionsGrid input:checked')).map(i=>i.value);
+  if(!checked.length){ alert('少なくとも1つ選んでください'); return; }
+  selections[currentStep] = checked;
+  if(currentStep < musicElements.length-1){
+    currentStep++; renderStep(currentStep);
+  }else{
+    showPrompt();
+  }
+}
+
+/* ---------- プロンプト生成 ---------- */
+function showPrompt(){
+  // 日本語→英語変換
+  const engSelections = selections.map((sel,i)=>{
+    return sel.map(jpOpt=>{
+      const idx = musicElements[i].jpOptions.indexOf(jpOpt);
+      return musicElements[i].en[idx];
+    });
+  });
+
+  const prompt =
+    'Create a fusion music track combining Indian and modern elements with the following specifications: ' +
+    musicElements.map((el,i)=>`${el.enTitle||el.enSection||el.en||el.jp}: ${engSelections[i].join(', ')}`).join('; ') +
+    '. The composition should seamlessly blend traditional Indian musical elements with contemporary production techniques. Focus on creating an authentic yet innovative sound that appeals to both traditional music lovers and modern audiences. Ensure the track maintains cultural integrity while incorporating cutting-edge musical production for digital streaming platforms and global distribution.';
+
+  /* 表示エリア */
+  const pArea = document.getElementById('promptContainer');
+  pArea.innerHTML = `
+      <h2>生成されたプロンプト</h2>
+      <div id="promptBox">${prompt}</div>
+      <div style="display:flex;gap:10px">
+        <button class="btn-success" onclick="showPrompt()">再生成</button>
+        <button class="btn-warning" onclick="resetAll()">最初から</button>
+      </div>`;
+  document.getElementById('optionsContainer').style.display='none';
+  pArea.style.display='block';
+}
+
+/* ---------- リセット ---------- */
+function resetAll(){
+  selections = Array(musicElements.length).fill([]);
+  currentStep = 0;
+  document.getElementById('promptContainer').style.display='none';
+  document.getElementById('optionsContainer').style.display='block';
+  renderStep(currentStep);
+}
+
+/* ---------- 初期化 ---------- */
+document.addEventListener('DOMContentLoaded',()=>renderStep(currentStep));
+</script>
+</body>
+</html>
